@@ -10,4 +10,4 @@ source venv/bin/activate      # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 
-python -m incident_insights parse --source ./evidence/
+python -m incident_insights

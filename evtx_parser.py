@@ -1,34 +1,38 @@
 import json
+from typing import List
 from evtx import PyEvtxParser
 import typer
 from typing_extensions import Annotated
 from flatten_json import flatten
-import pandas as pd
 import sys
+import csv
+import io
 
 app = typer.Typer(help="Parse EVTX files")
 
 
-# Print as JSONL
-# Print Specific ID
-# Print as CSV or TSV
+def output_format(parser: List, delimiter: str, output_path: io.TextIOWrapper):
+    writer = csv.writer(output_path, delimiter=delimiter)
+    header = False
+    for records in parser:
+        records['data'] = json.loads(records["data"])
+        if not header:
+            writer.writerow(flatten(records).keys())
+            header = True
+        writer.writerow(flatten(records).values())
+        
+def output_json(parser: List, output_path: io.TextIOWrapper):
+    for records in parser:
+        records["data"] = json.loads(records["data"])
+        output_path.write(json.dumps(records) + '\n')
 
-# takes very long -> Find fix
-def output_format(parser: PyEvtxParser, delimitter: str, file=sys.stdout, id=None):
-    new = pd.DataFrame()
-    for records in parser.records_json():
-        if id is not None and records["event_record_id"] == int(id):
-            r = flatten(records)
-            new = pd.concat([new, pd.DataFrame(r, index=r.keys())])
-            break
-        elif id is not None:
-            pass
-        else:
-            records["data"] = json.loads(records["data"])
-            r = flatten(records)
-            new = pd.concat([new, pd.DataFrame(r, index=r.keys())])
-    new.to_csv(file, sep=delimitter, index=False)
 
+def filter_by_ID(parser: List[int], id: int) -> dict:
+    out = []
+    for records in parser:
+        if records["event_record_id"] in id:
+            out.append(records)
+    return out
 
 @app.command("show")
 def print_evtx_file(
@@ -37,55 +41,35 @@ def print_evtx_file(
         str, typer.Option("-o", help="Output path of parsed evtx")
     ] = None,
     event_id: Annotated[
-        str, typer.Option("-id", help="specify event_records_id")
+        str, typer.Option("-i", help="specify event_records_ids delimited by a space. E.g. 78 50 30")
     ] = None,
     delimiter: Annotated[
         str,
         typer.Option("-d", help="display evtx in rows and columns by given delimter"),
     ] = None,
 ):
-    """
-    Parses an EVTX file and extracts event data and either prints it to stdout or an output path
 
-    Args:
-        evtx_file_path: The path to the .evtx file\n
-        output_path: The Path to save the parsed .evtx file\n
-
-    Returns:
-        Prints or writes json for evtx file
-    """
 
     parser = PyEvtxParser(str(evtx_file_path))
-    
+
     if output_path is None:
-        if delimiter is not None:
-            output_format(parser, delimiter, id=event_id)
-        else:
-            for records in parser.records_json():
-                records["data"] = json.loads(records["data"])
-                if event_id is not None and records["event_record_id"] == int(event_id):
-                    print(json.dumps(records))
-                    break
-                elif event_id is None:
-                    print(json.dumps(records))
-
+        output_path = sys.stdout
     else:
-        if delimiter is not None and output_path is not None:
-            output_format(parser, delimiter, file=output_path, event_id=event_id)
-        else:
-            for records in parser.records_json():
-                records["data"] = json.loads(records["data"])
-                with open(output_path, "w", encoding="utf-8") as file:
-                    if event_id is not None and records["event_record_id"] == int(event_id):
-                        file.write(json.dumps(records))
-                        break
-                    elif event_id is None:
-                        file.write(json.dumps(records))
+        output_path = open(output_path, "w")
+
+    parser = parser.records_json()
+
+    if event_id is not None:
+        event_id = [int(item) for item in event_id.split() ]
+        print(type(event_id))
+        parser = filter_by_ID(list(parser), event_id)
+    if delimiter is not None:
+        output_format(list(parser), delimiter, output_path)
+    else:
+        output_json(list(parser), output_path)
+
+    if output_path is not sys.stdout:
+        output_path.close()
     
-
-
-
-
-
 if __name__ == "__main__":
     app()

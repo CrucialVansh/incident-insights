@@ -15,16 +15,17 @@ def output_format(parser: List, delimiter: str, output_path: io.TextIOWrapper):
     writer = csv.writer(output_path, delimiter=delimiter)
     header = False
     for records in parser:
-        records['data'] = json.loads(records["data"])
+        records["data"] = json.loads(records["data"])
         if not header:
             writer.writerow(flatten(records).keys())
             header = True
         writer.writerow(flatten(records).values())
-        
+
+
 def output_json(parser: List, output_path: io.TextIOWrapper):
     for records in parser:
         records["data"] = json.loads(records["data"])
-        output_path.write(json.dumps(records) + '\n')
+        output_path.write(json.dumps(records) + "\n")
 
 
 def filter_by_ID(parser: List[int], id: int) -> dict:
@@ -34,21 +35,24 @@ def filter_by_ID(parser: List[int], id: int) -> dict:
             out.append(records)
     return out
 
-@app.command("show")
+
+@app.command()
 def print_evtx_file(
     evtx_file_path: Annotated[str, typer.Argument(help="Path to the evtx file")],
     output_path: Annotated[
         str, typer.Option("-o", help="Output path of parsed evtx")
     ] = None,
     event_id: Annotated[
-        str, typer.Option("-i", help="specify event_records_ids delimited by a space. E.g. 78 50 30")
+        str,
+        typer.Option(
+            "-i", help="specify event_records_ids delimited by a space. E.g. 78 50 30"
+        ),
     ] = None,
     delimiter: Annotated[
         str,
         typer.Option("-d", help="display evtx in rows and columns by given delimter"),
     ] = None,
 ):
-
 
     parser = PyEvtxParser(str(evtx_file_path))
 
@@ -60,7 +64,7 @@ def print_evtx_file(
     parser = parser.records_json()
 
     if event_id is not None:
-        event_id = [int(item) for item in event_id.split() ]
+        event_id = [int(item) for item in event_id.split()]
         print(type(event_id))
         parser = filter_by_ID(list(parser), event_id)
     if delimiter is not None:
@@ -70,6 +74,7 @@ def print_evtx_file(
 
     if output_path is not sys.stdout:
         output_path.close()
-    
+
+
 if __name__ == "__main__":
     app()

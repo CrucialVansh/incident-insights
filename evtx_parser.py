@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Tuple, Generator, Optional
 from evtx import PyEvtxParser
 import typer
 from typing_extensions import Annotated
@@ -7,6 +7,8 @@ from flatten_json import flatten
 import sys
 import csv
 import io
+from dateutil import parser as date_parser
+from datetime import timezone
 
 app = typer.Typer(help="Parse EVTX files")
 
@@ -16,9 +18,9 @@ def output_format(parser: List, delimiter: str, output_path: io.TextIOWrapper):
     header = False
     for records in parser:
         records["data"] = json.loads(records["data"])
-        if not header:
-            writer.writerow(flatten(records).keys())
-            header = True
+        #if not header:
+        #    writer.writerow(flatten(records).keys())
+        #    header = True
         writer.writerow(flatten(records).values())
 
 
@@ -28,13 +30,42 @@ def output_json(parser: List, output_path: io.TextIOWrapper):
         output_path.write(json.dumps(records) + "\n")
 
 
-def filter_by_ID(parser: List[int], id: int) -> dict:
-    out = []
+def filter_by_ID(parser: List, id: List[int]):
     for records in parser:
         if records["event_record_id"] in id:
-            out.append(records)
-    return out
+            yield records
 
+
+
+def filter_by_time(parser: Generator, start_time: Optional[str], end_time: Optional[str]):
+    # 1. Parse Input & Force UTC
+    start_dt = None
+    if start_time:
+        start_dt = date_parser.parse(start_time)
+        # If the user didn't specify a timezone (like +05:00), assume UTC
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+
+    end_dt = None
+    if end_time:
+        end_dt = date_parser.parse(end_time)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+    for records in parser:
+        # 2. Parse Record Timestamp
+        # EVTX timestamps are usually strings ending in "UTC" or "Z"
+        record_dt = date_parser.parse(records["timestamp"])
+
+        # 3. Comparisons
+        if start_dt and record_dt < start_dt:
+            continue
+        
+        if end_dt and record_dt > end_dt:
+            continue
+
+        # 4. CRITICAL: You must yield the record if it passes checks!
+        yield records
 
 @app.command()
 def print_evtx_file(
@@ -52,6 +83,8 @@ def print_evtx_file(
         str,
         typer.Option("-d", help="display evtx in rows and columns by given delimter"),
     ] = None,
+    after: Annotated[str, typer.Option("--after", help="Start time (e.g. 2021-01-01)")] = None,
+    before: Annotated[str, typer.Option("--before", help="End time (e.g. 2021-01-30)")] = None,
 ):
 
     parser = PyEvtxParser(str(evtx_file_path))
@@ -63,14 +96,16 @@ def print_evtx_file(
 
     parser = parser.records_json()
 
+
     if event_id is not None:
         event_id = [int(item) for item in event_id.split()]
-        print(type(event_id))
-        parser = filter_by_ID(list(parser), event_id)
+        parser = filter_by_ID(parser, event_id)
+    if after is not None or before is not None:
+        parser = filter_by_time(parser, after, before)
     if delimiter is not None:
-        output_format(list(parser), delimiter, output_path)
+        output_format(parser, delimiter, output_path)
     else:
-        output_json(list(parser), output_path)
+        output_json(parser, output_path)
 
     if output_path is not sys.stdout:
         output_path.close()

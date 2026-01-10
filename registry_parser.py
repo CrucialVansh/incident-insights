@@ -4,13 +4,13 @@ from typing_extensions import Annotated
 from typing import Dict
 import json
 import sys
+import csv
 import io
 
 app = typer.Typer(help="Parse Windows Registry files incluing NTUSER.DAT")
 
 
-def rec(key: Registry.RegistryKey, out: io.TextIOWrapper):
-
+def reg_formater(key: Registry.RegistryKey):
     current_key_data = {
         "path": key.path(),
         "timestamp": key.timestamp().isoformat(),
@@ -20,7 +20,6 @@ def rec(key: Registry.RegistryKey, out: io.TextIOWrapper):
     
     for value in key.values():
             data = value.value()
-            
             item = {
                 "name": value.name(),
                 "type": value.value_type_str()
@@ -32,6 +31,12 @@ def rec(key: Registry.RegistryKey, out: io.TextIOWrapper):
                 item["value"] = data
                 
             current_key_data["values"].append(item)
+    
+    return current_key_data
+
+def rec(key: Registry.RegistryKey, out: io.TextIOWrapper):
+
+    current_key_data = reg_formater(key)
                 
     out.write(json.dumps(current_key_data) + "\n")
 
@@ -39,6 +44,19 @@ def rec(key: Registry.RegistryKey, out: io.TextIOWrapper):
         rec(subkey, out)
 
 
+def csv_rec(key: Registry.RegistryKey, out: csv):
+    current_key_data = reg_formater(key)
+
+    if len(current_key_data["values"]) >= 1:
+        for item in current_key_data["values"]:
+            temp = current_key_data
+            temp["values"] = item
+            out.writerow(temp.values())
+    else:
+        out.writerow(current_key_data.values())
+
+    for subkey in key.subkeys():
+        csv_rec(subkey, out)
 
 
 @app.command()
@@ -54,7 +72,12 @@ def print_registry_file(
     else:
         output_path = open(output_path, 'w')
     
-    rec(reg.root())
+    if not csv_out:
+        rec(reg.root(), output_path)
+    else:
+        write = csv.writer(output_path)
+        write.writerow(["Full Path", "Timestamp", "Values"])
+        csv_rec(reg.root(), write)
 
 
     if output_path is not sys.stdout:

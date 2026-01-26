@@ -1,13 +1,13 @@
-import click
+import typer
+import evtx_parser
+import registry_parser
 
-@click.group()
-def cli():
-    pass
+# The main application
+app = typer.Typer(help="DFIR Forensic Artifact Parser")
 
-@cli.command()
-@click.option("--source", required=True, help="Path to evidence directory")
-def parse(source):
-    click.echo(f"Parsing artefacts from {source}...")
+# Mount the sub-apps
+app.add_typer(evtx_parser.app, name="evtx")
+app.add_typer(registry_parser.app, name="reg")
 
 if __name__ == "__main__":
-    cli()
+    app()

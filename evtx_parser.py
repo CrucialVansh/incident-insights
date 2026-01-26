@@ -1,5 +1,5 @@
 import json
-from typing import List, Tuple, Generator, Optional
+from typing import List, Generator, Optional
 from evtx import PyEvtxParser
 import typer
 from typing_extensions import Annotated
@@ -15,12 +15,8 @@ app = typer.Typer(help="Parse EVTX files")
 
 def output_format(parser: List, delimiter: str, output_path: io.TextIOWrapper):
     writer = csv.writer(output_path, delimiter=delimiter)
-    header = False
     for records in parser:
         records["data"] = json.loads(records["data"])
-        #if not header:
-        #    writer.writerow(flatten(records).keys())
-        #    header = True
         writer.writerow(flatten(records).values())
 
 
@@ -38,11 +34,9 @@ def filter_by_ID(parser: List, id: List[int]):
 
 
 def filter_by_time(parser: Generator, start_time: Optional[str], end_time: Optional[str]):
-    # 1. Parse Input & Force UTC
     start_dt = None
     if start_time:
         start_dt = date_parser.parse(start_time)
-        # If the user didn't specify a timezone (like +05:00), assume UTC
         if start_dt.tzinfo is None:
             start_dt = start_dt.replace(tzinfo=timezone.utc)
 
@@ -53,21 +47,15 @@ def filter_by_time(parser: Generator, start_time: Optional[str], end_time: Optio
             end_dt = end_dt.replace(tzinfo=timezone.utc)
 
     for records in parser:
-        # 2. Parse Record Timestamp
-        # EVTX timestamps are usually strings ending in "UTC" or "Z"
         record_dt = date_parser.parse(records["timestamp"])
-
-        # 3. Comparisons
         if start_dt and record_dt < start_dt:
             continue
         
         if end_dt and record_dt > end_dt:
             continue
-
-        # 4. CRITICAL: You must yield the record if it passes checks!
         yield records
 
-@app.command()
+@app.command("parse")
 def print_evtx_file(
     evtx_file_path: Annotated[str, typer.Argument(help="Path to the evtx file")],
     output_path: Annotated[

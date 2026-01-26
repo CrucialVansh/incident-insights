@@ -1,2 +1,3 @@
-.vscode
+/.vscode
 changes.md
+__pycache__

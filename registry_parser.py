@@ -6,6 +6,7 @@ import json
 import sys
 import csv
 import io
+from tqdm import tqdm
 
 app = typer.Typer(help="Parse Windows Registry files incluing NTUSER.DAT")
 
@@ -59,7 +60,7 @@ def csv_rec(key: Registry.RegistryKey, out: csv):
         csv_rec(subkey, out)
 
 
-@app.command()
+@app.command("parse")
 def print_registry_file(
     registry_file_path: Annotated[str, typer.Argument(help="Path to registry file")],
     output_path: Annotated[str, typer.Option("-o")] = None,
